@@ -1,0 +1,8 @@
+models/
+work/
+*.mp4
+*.mov
+*.wav
+*.jpg
+*.png
+__pycache__/
