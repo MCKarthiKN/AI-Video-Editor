@@ -38,3 +38,10 @@ to match the new script and gestures.
 ## Filming tips
 Dark plain background (or any room: the cutout removes it), dark clothes, one soft light on the face,
 phone on a tripod at 1080p or 4K, hands kept in frame, a short pause after each big gesture.
+
+## Hologram scenes (latest workflow)
+The full, current workflow lives in the Claude Code skill `.claude/skills/physics-hologram-video/`:
+Tamil transcription with word timings, hand tracking, Robust Video Matting cutout, interactive hologram assets
+(leaves react to the hands, fruit can be plucked), physics animations (slow-motion free fall with a dotted
+distance scale, time stop), a virtual camera with zooms and motion blur, and subtle wide sound design.
+Start with `bash .claude/skills/physics-hologram-video/scripts/setup_env.sh`.
