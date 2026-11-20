@@ -6,3 +6,6 @@ work/
 *.jpg
 *.png
 __pycache__/
+*.pdf
+*.epub
+*.zip
