@@ -70,7 +70,7 @@ scene.add(atm);
   fragmentShader:`varying float vs; void main(){float d=length(gl_PointCoord-.5); gl_FragColor=vec4(vec3(.75,.88,1.)*(.25+vs*.9)*smoothstep(.5,.0,d),1.);}`})));}
 
 // "you" pin + 10-minute path (Earth turns 2.5 deg of longitude in 10 min)
-const HOME=[78.6,11.1], PATH=2.5;
+const HOME=[79.4,11.1], PATH=2.5;
 const pinMat=new THREE.SpriteMaterial({color:0xffffff,blending:THREE.AdditiveBlending,depthWrite:false,map:(()=>{const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d');const g=x.createRadialGradient(64,64,0,64,64,64);g.addColorStop(0,'#fff');g.addColorStop(.15,'#bff');g.addColorStop(.4,'rgba(80,200,255,.35)');g.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=g;x.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);})()});
 const pinA=new THREE.Sprite(pinMat), pinB=new THREE.Sprite(pinMat.clone()); pinB.material.color=new THREE.Color(1,.75,.4);
 earth.add(pinA,pinB);
@@ -90,9 +90,9 @@ fetch('geo50.json').then(r=>r.json()).then(g=>{
   mk(g.land,coastMat,1.0006); mk(g.india,indMat,1.0009); window.geoReady=1;});
 // comet trail of the pin, kept in SPACE (scene), while the pin itself rides on the turning Earth
 const trailMat=new LineMaterial({color:0xffffff,vertexColors:true,linewidth:6,transparent:true,worldUnits:false}); trailMat.resolution.set(W,H);
-const tg=new LineGeometry(); const trail=new Line2(tg,trailMat); scene.add(trail);
+const tg=new LineGeometry(); const trail=new Line2(tg,trailMat); earth.add(trail);
 const ringTex=(()=>{const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d');x.strokeStyle='#cff';x.lineWidth=7;x.shadowColor='#6df';x.shadowBlur=14;x.beginPath();x.arc(64,64,40,0,7);x.stroke();return new THREE.CanvasTexture(c);})();
-const startRing=new THREE.Sprite(new THREE.SpriteMaterial({map:ringTex,color:0x9fefff,blending:THREE.AdditiveBlending,depthWrite:false,transparent:true})); scene.add(startRing);
+const startRing=new THREE.Sprite(new THREE.SpriteMaterial({map:ringTex,color:0x9fefff,blending:THREE.AdditiveBlending,depthWrite:false,transparent:true})); earth.add(startRing);
 path.visible=false; pinA.visible=false; earth.remove(pinB); scene.add(pinB);
 const comp=new EffectComposer(R); comp.addPass(new RenderPass(scene,cam));
 const bloom=new UnrealBloomPass(new THREE.Vector2(W,H),.55,.45,.32); comp.addPass(bloom); comp.addPass(new OutputPass());
@@ -106,41 +106,42 @@ function proj(v){const p=v.clone().applyMatrix4(earth.matrixWorld).project(cam);
 // "250 KM" pops on arrival; then a long pull-back to the whole spinning Earth.
 const T0=.8, T1=3.8, BASE=-28;
 const spinAt=t=>BASE+PATH*ease(seg(t,T0,T1))+1.1*Math.max(0,t-6.2);
-const pinWorld=t=>{const e=new THREE.Euler(0,THREE.MathUtils.degToRad(spinAt(t)),0); return P(HOME[0],HOME[1],1.002).applyEuler(e);};
+const rotY=t=>new THREE.Euler(0,THREE.MathUtils.degToRad(spinAt(t)),0);
+// the glowing point is STATIC in the frame: fixed in space where HOME was at T0. The Earth turns under it.
+const PIN=P(HOME[0],HOME[1],1.002).applyEuler(rotY(0));
+const groundLon=t=>HOME[0]-(spinAt(Math.min(t,T1))-spinAt(T0));          // longitude currently under the point
 function projW(v){const p=v.clone().project(cam); return [(p.x+1)/2*W,(1-p.y)/2*H];}
+function projE(v){return projW(v.clone().applyMatrix4(earth.matrixWorld));}
 const backOut=x=>{const c=1.9; return 1+(c+1)*Math.pow(x-1,3)+c*Math.pow(x-1,2);};
 window.render=(t)=>{
   earth.rotation.y=THREE.MathUtils.degToRad(spinAt(t)); earth.updateMatrixWorld(true);
   holo.uniforms.uScan.value=-1.2+((t*.35)%2.4);
   const zoom=ease(seg(t,4.9,9.2));
-  const mid=pinWorld((T0+T1)/2).add(new THREE.Vector3(0,-.012,0));
-  const dir0=mid.clone().normalize();
-  const dir1=dir0.clone().applyAxisAngle(new THREE.Vector3(0,1,0),THREE.MathUtils.degToRad(-12)).add(new THREE.Vector3(0,.22,0)).normalize();
+  const dir0=PIN.clone().normalize().add(new THREE.Vector3(0,-.012,0)).normalize();
+  const dir1=dir0.clone().applyAxisAngle(new THREE.Vector3(0,1,0),THREE.MathUtils.degToRad(-14)).add(new THREE.Vector3(0,.22,0)).normalize();
   const dist=THREE.MathUtils.lerp(1.30,3.6,zoom);
   cam.position.copy(dir0.clone().lerp(dir1,zoom).normalize().multiplyScalar(dist));
-  cam.lookAt(mid.clone().multiplyScalar(1-zoom));
+  cam.lookAt(PIN.clone().multiplyScalar(1-zoom));
   cam.fov=THREE.MathUtils.lerp(26,32,zoom); cam.updateProjectionMatrix();
-  // trail: pin positions from T0 to now, brightest at the head
-  const now=Math.min(t,T1), N=90, pos=[], col=[];
-  const fadeAll=1-seg(t,5.6,6.6);
-  for(let i=0;i<N;i++){const tau=T0+(Math.max(now,T0+.001)-T0)*i/(N-1); const v=pinWorld(tau).multiplyScalar(1.0008); pos.push(v.x,v.y,v.z);
-    const k=(.45+1.6*Math.exp(-(now-tau)/.45))*fadeAll*(t<T0?0:1); col.push(1*k,.66*k,.32*k);}
-  tg.setPositions(pos); tg.setColors(col); trail.computeLineDistances();
+  // trace drawn ON the map: from the ground spot that was under the point at T0 to the spot under it now
+  const fadeAll=1-seg(t,5.6,6.6), g1=groundLon(t), N=90, pos=[], col=[];
+  for(let i=0;i<N;i++){const u=i/(N-1), lon=HOME[0]+(g1-HOME[0])*u, v=P(lon,HOME[1],1.0016); pos.push(v.x,v.y,v.z);
+    const k=(.45+1.6*Math.pow(u,6))*fadeAll*(t<T0?0:1); col.push(k,.66*k,.32*k);}
+  tg.setPositions(pos); tg.setColors(col);
   trailMat.linewidth=THREE.MathUtils.lerp(9,3,zoom);
-  const head=pinWorld(t); pinB.position.copy(head.clone().multiplyScalar(1.001));
-  const ps=THREE.MathUtils.lerp(.016,.05,zoom)*(1+.25*Math.sin(t*6)*seg(t,T0,T0+.3)*(1-seg(t,T1,T1+.3))); pinB.scale.setScalar(ps);
-  startRing.position.copy(pinWorld(T0).multiplyScalar(1.001)); startRing.scale.setScalar(THREE.MathUtils.lerp(.012,.03,zoom)); startRing.material.opacity=seg(t,T0-.4,T0)*fadeAll;
+  pinB.position.copy(PIN.clone().multiplyScalar(1.001).applyMatrix4(new THREE.Matrix4()));
+  const pulse=1+.22*Math.sin(t*7)*seg(t,T0,T0+.3)*(1-seg(t,T1,T1+.3));
+  pinB.scale.setScalar(THREE.MathUtils.lerp(.018,.05,zoom)*pulse);
+  // after the pull-back the point rides with the Earth again (it is just you, on the planet)
+  if(t>T1){const back=P(g1,HOME[1],1.003).applyMatrix4(earth.matrixWorld); pinB.position.copy(back);}
+  startRing.position.copy(P(HOME[0],HOME[1],1.002)); startRing.scale.setScalar(THREE.MathUtils.lerp(.013,.03,zoom)); startRing.material.opacity=seg(t,T0-.4,T0)*fadeAll;
   coastMat.linewidth=THREE.MathUtils.lerp(2.6,1.5,zoom);
-  // labels
-  const [hx,hy]=projW(head); const runOp=seg(t,T0,T0+.3)*(1-seg(t,T1,T1+.4));
-  const mins=10*ease(seg(t,T0,T1));
-  label('min',`${mins.toFixed(1)} MIN · 0 STEPS`,hx,hy-46,24,'',runOp);
-  const [sx,sy]=projW(pinWorld(T0)); label('start','START',sx,sy+44,20,'',startRing.material.opacity*.8*(1-zoom));
-  const pop=seg(t,T1,T1+.45), [mx,my]=projW(pinWorld((T0+T1)/2));
-  const sc=pop>0?backOut(pop):0;
-  const el=label('km','250 KM',mx,my-120,80,'amb',Math.min(1,pop*3)*(1-seg(t,5.4,6.0)));
-  document.getElementById('km').style.transform=`translate(-50%,-50%) scale(${sc})`;
-  document.getElementById('km').style.filter=`brightness(${1+1.5*Math.max(0,1-pop*2.2)})`;
+  const [hx,hy]=projW(PIN); const runOp=seg(t,T0,T0+.3)*(1-seg(t,T1,T1+.4));
+  label('min',`${(10*ease(seg(t,T0,T1))).toFixed(1)} MIN · 0 STEPS`,hx,hy-50,24,'',runOp);
+  const [sx,sy]=projE(P(HOME[0],HOME[1])); label('start','START',sx,sy+44,20,'',startRing.material.opacity*.8*(1-zoom));
+  const pop=seg(t,T1,T1+.45), [mx,my]=projE(P((HOME[0]+g1)/2,HOME[1]));
+  label('km','250 KM',mx,my-120,80,'amb',Math.min(1,pop*3)*(1-seg(t,5.4,6.0)));
+  const e=document.getElementById('km'); e.style.transform=`translate(-50%,-50%) scale(${pop>0?backOut(pop):0})`; e.style.filter=`brightness(${1+1.5*Math.max(0,1-pop*2.2)})`;
   label('km2','IN 10 MINUTES',mx,my-58,24,'',seg(t,T1+.25,T1+.6)*(1-seg(t,5.4,6.0)));
   const eOp=seg(t,7.0,8.0);
   label('cap','EARTH CARRIED ME ≈ 250 KM IN 10 MINUTES',W/2,H-110,34,'',eOp);
