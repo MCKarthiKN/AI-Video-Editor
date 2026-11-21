@@ -1,0 +1,144 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>
+@font-face{font-family:Lemon;src:url(fonts/LEMONMILK-Medium.otf)}
+@font-face{font-family:LemonL;src:url(fonts/LEMONMILK-Light.otf)}
+html,body{margin:0;background:#000;overflow:hidden}
+#ui{position:absolute;inset:0;pointer-events:none;font-family:Lemon,sans-serif;color:#bff4ff}
+.lab{position:absolute;white-space:nowrap;text-shadow:0 0 8px rgba(90,220,255,.9),0 0 26px rgba(60,180,255,.5);letter-spacing:.12em;transform:translate(-50%,-50%)}
+.amb{color:#ffd39a;text-shadow:0 0 8px rgba(255,170,70,.9),0 0 26px rgba(255,140,40,.5)}
+.card{position:absolute;transform:translate(-50%,-50%);padding:18px 34px;border-radius:16px;background:rgba(4,14,28,.55);
+  border:1.5px solid rgba(110,220,255,.75);box-shadow:0 0 18px rgba(80,200,255,.35),inset 0 0 22px rgba(80,200,255,.12);text-align:center;backdrop-filter:blur(6px)}
+.card.amb{border-color:rgba(255,190,110,.85);box-shadow:0 0 18px rgba(255,160,60,.35),inset 0 0 22px rgba(255,160,60,.12)}
+.small{font-family:LemonL,Lemon;font-size:22px;letter-spacing:.18em;opacity:.85}
+.big{font-size:44px;letter-spacing:.1em;margin-top:6px}
+</style>
+<script type="importmap">{"imports":{"three":"/npm/node_modules/three/build/three.module.js","three/addons/":"/npm/node_modules/three/examples/jsm/"}}</script>
+</head><body><div id="ui"></div>
+<script type="module">
+import * as THREE from 'three';
+import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
+import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
+import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
+import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
+const Q=new URLSearchParams(location.search), MODE=Q.get('mode')||'main', W=+(Q.get('w')||1920), H=+(Q.get('h')||1080);
+document.body.style.width=W+'px'; document.body.style.height=H+'px';
+const ui=document.getElementById('ui');
+const R=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true}); R.setSize(W,H); R.setPixelRatio(1);
+R.toneMapping=THREE.ACESFilmicToneMapping; document.body.prepend(R.domElement);
+const scene=new THREE.Scene(); scene.fog=new THREE.FogExp2(0x000814,.006);
+const cam=new THREE.PerspectiveCamera(34,W/H,.1,2000);
+const CY=new THREE.Color(.35,.85,1), AM=new THREE.Color(1,.65,.3), WH=new THREE.Color(.85,.95,1);
+const add=(o,p=scene)=>(p.add(o),o);
+// hologram object = faint additive faces + bright edges
+function holo(geo,col=CY,face=.05,edge=.9,parent=scene,thr=20){
+  const g=new THREE.Group();
+  g.add(new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:face,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide})));
+  g.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo,thr),new THREE.LineBasicMaterial({color:col,transparent:true,opacity:edge,blending:THREE.AdditiveBlending})));
+  parent.add(g); return g;}
+function person(col,sit,phone){const g=new THREE.Group();
+  holo(new THREE.SphereGeometry(.17,12,8),col,.12,.9,g).position.y=sit?1.38:1.62;
+  const torso=holo(new THREE.CapsuleGeometry(.2,.48,4,10),col,.1,.9,g); torso.position.y=sit?.95:1.12;
+  if(sit){const th=holo(new THREE.CapsuleGeometry(.1,.42,4,8),col,.1,.8,g); th.rotation.z=Math.PI/2; th.position.set(.25,.6,0);
+          const sh=holo(new THREE.CapsuleGeometry(.09,.4,4,8),col,.1,.8,g); sh.position.set(.5,.3,0);}
+  else{for(const s of[-.1,.1]){const l=holo(new THREE.CapsuleGeometry(.09,.62,4,8),col,.1,.8,g); l.position.set(0,.42,s);}}
+  if(phone){const p=holo(new THREE.BoxGeometry(.04,.16,.09),AM,.6,1,g); p.position.set(.28,1.12,0); p.rotation.z=.5;
+    const glow=add(new THREE.PointLight(0xffaa55,2,1.5),g); glow.position.copy(p.position);}
+  return g;}
+
+// ---- world (static, in the ground frame)
+add(new THREE.GridHelper(4000,800,0x0d3550,0x0a2a40)).position.y=-.02;
+for(const z of[-.72,.72]){const r=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-2000,.12,z),new THREE.Vector3(2000,.12,z)]),new THREE.LineBasicMaterial({color:0x7fe4ff}));scene.add(r);}
+{const pts=[];for(let x=-2000;x<2000;x+=1.2){pts.push(new THREE.Vector3(x,.05,-1.1),new THREE.Vector3(x,.05,1.1));}
+ scene.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:0x2a7fa0,transparent:true,opacity:.6})));}
+for(let x=-2000;x<2000;x+=30){const p=holo(new THREE.CylinderGeometry(.08,.1,6.5,6),CY,.08,.7); p.position.set(x,3.25,-3.2);
+  const a=holo(new THREE.BoxGeometry(.08,.08,2.6),CY,.08,.6); a.position.set(x,6.3,-2);}
+{const pts=[];for(let x=-2000;x<2000;x+=30)pts.push(new THREE.Vector3(x,6.2,0),new THREE.Vector3(x+30,6.2,0));
+ scene.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:0x5fcfff,transparent:true,opacity:.5})));}
+const rnd=(()=>{let s=7;return()=>(s=(s*16807)%2147483647)/2147483647;})();
+const treeGeo=new THREE.ConeGeometry(1.6,5,7);
+for(let i=0;i<420;i++){const x=-2000+rnd()*4000, z=-(14+rnd()*70); const t=holo(treeGeo,new THREE.Color(.4,1,.6),.04,.45); t.position.set(x,2.5,z); t.scale.setScalar(.7+rnd()*.9);}
+{const pts=[];for(let x=-2000;x<=2000;x+=8){const y=18+10*Math.sin(x*.004)+6*Math.sin(x*.013+1)+3*Math.sin(x*.05);pts.push(new THREE.Vector3(x,y,-260));}
+ scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:0x3fa8d8,transparent:true,opacity:.55})));}
+// platform + observer (ground frame), near x=0 on the far side of the track
+const PLAT_X=300;
+const plat=holo(new THREE.BoxGeometry(90,1.0,5),CY,.02,.85); plat.position.set(PLAT_X,.5,4.6);
+const pillars=[];for(let x=-44;x<=44;x+=11){const c=holo(new THREE.CylinderGeometry(.09,.09,4,6),CY,.06,.6); c.position.set(PLAT_X+x,3,6.6); pillars.push([c,x]);}
+const roof=holo(new THREE.BoxGeometry(90,.15,3.4),CY,.015,.6); roof.position.set(PLAT_X,5.05,5.6);
+const observer=person(WH,false,false); observer.position.set(PLAT_X+2,1.0,4.2); observer.rotation.y=Math.PI/2; scene.add(observer);
+// ---- train (moves at V in +x). Carriage k spans [k*L, k*L+L-1] relative to the head; the friend's coach is k=0.
+const V=80/3.6, L=21, NC=22, FK=6, train=add(new THREE.Group());
+const coachGeo=new THREE.BoxGeometry(L-1,3.4,3.1,1,1,1);
+for(let k=0;k<NC;k++){const c=new THREE.Group(); c.position.x=-k*L; train.add(c);
+  holo(coachGeo,CY,.012,.85,c).position.y=2.25;
+  for(let w=0;w<6;w++){const wn=holo(new THREE.PlaneGeometry(1.9,1.1),CY,.02,.75,c); wn.position.set(-7.5+w*3,2.7,1.56);}
+  const door=holo(new THREE.PlaneGeometry(1.1,2.4),CY,.02,.6,c); door.position.set(9.2,2.0,1.56);
+  for(const bx of[-6.5,6.5])for(const bz of[-.72,.72])for(const dx of[-1.1,1.1]){const wh=holo(new THREE.TorusGeometry(.42,.07,6,16),CY,.1,.8,c); wh.position.set(bx+dx,.5,bz);}
+  // seats + passengers in the friend's coach (k=0) and a few ghost passengers elsewhere
+  if(k===FK){
+    for(const sx of[-1.0,1.0]){const s=holo(new THREE.BoxGeometry(.5,1.1,1.0),CY,.04,.5,c); s.position.set(sx*1.25,1.15,.6);}
+    const you=person(CY,true,false); you.position.set(-1.25,.6,.6); c.add(you);
+    const fr=person(AM,true,true); fr.position.set(1.25,.6,.6); fr.rotation.y=Math.PI; c.add(fr);
+  } else if(k%2===0){const p=person(CY,true,false); p.position.set(-3+k%3,.6,.6); p.scale.setScalar(.95); c.add(p); p.children.forEach(o=>o.children.forEach(m=>m.material.opacity*=.5));}
+}
+const head=holo(new THREE.CylinderGeometry(1.6,1.6,3.1,16,1,false,0,Math.PI),CY,.04,.8,train); head.rotation.x=Math.PI/2; head.rotation.z=-Math.PI/2; head.position.set(L/2-.5,2.0,0);
+// speed streak particles (ground frame dust)
+{const n=1500,a=new Float32Array(n*3);for(let i=0;i<n;i++){a[i*3]=-2000+rnd()*4000;a[i*3+1]=.3+rnd()*9;a[i*3+2]=-30+rnd()*60;}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(a,3));
+ scene.add(new THREE.Points(g,new THREE.PointsMaterial({color:0x8fe8ff,size:.08,transparent:true,opacity:.7,blending:THREE.AdditiveBlending})));}
+
+const comp=new EffectComposer(R); comp.addPass(new RenderPass(scene,cam));
+comp.addPass(new UnrealBloomPass(new THREE.Vector2(W,H),.7,.5,.18)); comp.addPass(new OutputPass());
+const cl=(x,a=0,b=1)=>Math.min(b,Math.max(a,x)), seg=(t,a,b)=>cl((t-a)/(b-a)), ease=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+function el(id,html,x,y,cls='lab',op=1){let e=document.getElementById(id);if(!e){e=document.createElement('div');e.id=id;ui.appendChild(e);}e.className=cls;e.innerHTML=html;e.style.left=x+'px';e.style.top=y+'px';e.style.opacity=op;return e;}
+const proj=v=>{const p=v.clone().project(cam);return[(p.x+1)/2*W,(1-p.y)/2*H];};
+
+// Timeline (seconds from "நீங்க ஒரு ட்ரெயின்ல போறீங்கன்னு வைங்க"):
+// 0-12.5 ride with the train (friend is at rest on screen); 12.5-15.5 camera brakes onto the platform; 15.5-26 train rushes past.
+const TB0=12.5, TB1=15.5;
+// camera x-velocity = V while riding, eases to 0 on the platform. Integrate analytically by sampling.
+function camX(t){let x=0,dt=1/50;for(let s=0;s<t;s+=dt){const v=V*(1-ease(seg(s,TB0,TB1)));x+=v*dt;}return x;}
+const trainX=t=>V*t;                                    // head position (ground frame)
+const FRIEND=t=>new THREE.Vector3(trainX(t)-FK*L+1.25,1.6,.6);
+const X_AT_BRAKE_END=()=>camX(TB1);
+const PX=0, TCUT=14.2, TPASS=21.8;
+plat.position.x=PX; roof.visible=false; pillars.forEach(([c])=>c.visible=false); observer.position.set(PX,1.0,5.4);
+const wipe=document.createElement('div'); wipe.style.cssText='position:absolute;left:0;right:0;height:3px;background:#bff;box-shadow:0 0 24px 8px rgba(90,220,255,.8)';ui.appendChild(wipe);
+const blk=document.createElement('div'); blk.style.cssText='position:absolute;left:0;right:0;bottom:0;background:#000';ui.appendChild(blk);
+const headX=t=>t<TCUT? V*t : V*(t-TPASS)+PX+FK*L-1.25;      // ride frame before the cut, platform frame after
+window.render=(t)=>{
+  train.position.x=headX(t);
+  const fx=headX(t)-FK*L+1.25;
+  let look;
+  if(t<TCUT){
+    const push=ease(seg(t,1.4,4.6))*(1-ease(seg(t,9.2,13.6)));
+    cam.position.set(fx-1.45,THREE.MathUtils.lerp(3.4,2.6,push),THREE.MathUtils.lerp(13,6.2,push));
+    look=new THREE.Vector3(fx-1.45,2.3,0); cam.fov=34;
+  } else {
+    const dr=ease(seg(t,TCUT,26));                          // slow drift on the platform
+    cam.position.set(PX+7.5-dr*1.5,2.3,12.5-dr*.8); look=new THREE.Vector3(PX-2,2.1,2.6); cam.fov=40;
+  }
+  cam.aspect=W/H; cam.updateProjectionMatrix(); cam.lookAt(look); cam.updateMatrixWorld(true);
+  // scan wipe at the cut: black from the top down, then reveal
+  const w1=seg(t,TCUT-.35,TCUT), w2=seg(t,TCUT,TCUT+.45);
+  if(t<TCUT){blk.style.top='0px';blk.style.height=(w1*H)+'px';wipe.style.top=(w1*H)+'px';wipe.style.opacity=w1>0&&w1<1?1:0;}
+  else{blk.style.top=(w2*H)+'px';blk.style.height=((1-w2)*H)+'px';wipe.style.top=(w2*H)+'px';wipe.style.opacity=w2<1?1:0;}
+  const f=proj(new THREE.Vector3(fx,2.15,2.2)), y2=proj(new THREE.Vector3(fx-2.5,2.4,2.2));
+  const yOp=seg(t,2.4,3.0)*(1-seg(t,9.6,10.2));
+  el('you','YOU',y2[0],y2[1]-10,'lab',yOp).style.fontSize='28px'; el('fr','FRIEND',f[0],f[1]-10,'lab amb',yOp).style.fontSize='28px';
+  const sOp=seg(t,10.2,10.8)*(1-seg(t,13.6,14.0));
+  el('seat',`<div class="small">FROM YOUR SEAT</div><div class="big">FRIEND · AT REST</div><div class="small" style="margin-top:6px">SAME PLACE AS 5 MINUTES AGO</div>`,W/2,H*.14,'card',sOp);
+  const pOp=seg(t,18.6,19.3)*(1-seg(t,24.2,24.7));
+  el('plat',`<div class="small">FROM THE PLATFORM</div><div class="big amb">FRIEND · MOVING</div><div class="small amb" style="margin-top:6px">80 KM/H</div>`,W/2,H*.14,'card amb',pOp);
+  const fp=proj(new THREE.Vector3(fx,2.6,2.2)); const near=Math.exp(-Math.pow((t-TPASS)/.9,2));
+  
+  const o=proj(observer.position.clone().add(new THREE.Vector3(0,2.0,0))); el('obs','OBSERVER',o[0],o[1]-10,'lab',seg(t,TCUT+.6,TCUT+1.2)*(1-seg(t,24.2,24.7))).style.fontSize='26px';
+  const bOp=seg(t,24.6,25.3)*(1-seg(t,31.2,31.7));
+  el('b1',`<div class="small">FROM YOUR SEAT</div><div class="big">AT REST</div>`,W*.3,H*.15,'card',bOp);
+  el('b2',`<div class="small">FROM THE PLATFORM</div><div class="big amb">MOVING</div>`,W*.7,H*.15,'card amb',bOp);
+  el('b3','SAME FRIEND · SAME MOMENT · TWO ANSWERS',W/2,H*.88,'lab',seg(t,25.6,26.3)*(1-seg(t,31.2,31.7))).style.fontSize='30px';
+  el('b4','NOBODY IS WRONG',W/2,H*.93,'lab amb',seg(t,29.4,30.0)*(1-seg(t,31.2,31.7))).style.fontSize='24px';
+  document.body.style.opacity=seg(t,0,.4)*(1-seg(t,31.3,31.7));
+  comp.render();
+};
+window.ready=Promise.resolve(1);
+</script></body></html>

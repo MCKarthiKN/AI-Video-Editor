@@ -101,6 +101,17 @@ dip slightly under speech, final `loudnorm=I=-14:TP=-1.5`.
 - Effects in front of the face are never OK (orb radius limited to below the chin, front leaves masked off the face).
 - Repo is public: commit code only, never the user's footage or images.
 
+## Long multi-clip episodes (learned on Kinematics Ep 1)
+- Script docx + several clips: map script beats to clips first (clip names can differ from the shot list).
+- Transcribe with `scripts/transcribe_chunks.py` (silence-bounded <= 24 s chunks); whole-file Whisper drops words at 30 s edges.
+- Build an EDL (`episodes/kinematics_ep01/edl.py`): cut retakes/false starts/stammers by word timings, auto-tighten pauses;
+  re-transcribe the edited voice to catch chopped words before rendering.
+- Higher-quality graphics: three.js scenes in headless Chromium (`templates/three/`), NASA textures from the
+  `three-globe` npm tarball, vector coastlines (world-atlas) - crisp at every zoom. Keep bloom subtle.
+- Background jobs stop at 2 h: split RVM and long renders into chunks. 4 cores: don't run more than ~3 heavy jobs.
+- User asked: Earth beat = glowing point fixed on screen, Earth turns under it, trace drawn back to START, "250 KM" pops.
+- User likes: Lemon Milk font for all on-screen text (they supply it), 3D-quality animations.
+
 ## Templates
 `templates/render_v3.py`, `score_v3.py`, `subs_v3.py`: the earlier vertical talking-head version (icons from
 @tabler/icons via npm rasterised with `scripts/raster_icons.js`, Tamil key-word pop-ups / subtitles with libass +

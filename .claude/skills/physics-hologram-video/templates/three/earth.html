@@ -104,48 +104,50 @@ function proj(v){const p=v.clone().applyMatrix4(earth.matrixWorld).project(cam);
 
 // t in seconds. Close shot: camera still, Earth turns 2.5 deg (= 10 minutes) and carries the pin, leaving a glowing trail;
 // "250 KM" pops on arrival; then a long pull-back to the whole spinning Earth.
-const T0=.8, T1=3.8, BASE=-28;
-const spinAt=t=>BASE+PATH*ease(seg(t,T0,T1))+1.1*Math.max(0,t-6.2);
+const Qp=new URLSearchParams(location.search), q=(k,d)=>+(Qp.get(k)??d);
+// beat timing (scene seconds): push-in, trace, 250 KM pop, pull-back
+const ZI0=q('zi0',1.4), ZI1=q('zi1',5.0), T0=q('t0',5.3), T1=q('t1',9.1), ZO0=q('zo0',12.0), ZO1=q('zo1',15.3), CAP=q('cap',12.6), BASE=-34;
+// spin rate (deg/s): fast while wide, slows into the trace rate, stops after the 10 minutes, picks up on the pull-back
+const TR=PATH/(T1-T0), DT=.01, SP=[0]; {let a=0; for(let i=1;i<=3000;i++){const t=i*DT;
+  const r= t<T0 ? THREE.MathUtils.lerp(4,TR,ease(seg(t,ZI0,ZI1))) : t<T1 ? TR : 3*ease(seg(t,ZO0,ZO1));
+  a+=r*DT; SP.push(a);}}
+const spinAt=t=>BASE+SP[Math.max(0,Math.min(3000,Math.round(t/DT)))];
 const rotY=t=>new THREE.Euler(0,THREE.MathUtils.degToRad(spinAt(t)),0);
-// the glowing point is STATIC in the frame: fixed in space where HOME was at T0. The Earth turns under it.
-const PIN=P(HOME[0],HOME[1],1.002).applyEuler(rotY(0));
-const groundLon=t=>HOME[0]-(spinAt(Math.min(t,T1))-spinAt(T0));          // longitude currently under the point
+const PIN=P(HOME[0],HOME[1],1.002).applyEuler(rotY(T0));       // the glowing point: fixed in space
+const groundLon=t=>HOME[0]-(spinAt(Math.min(Math.max(t,T0),T1))-spinAt(T0));
 function projW(v){const p=v.clone().project(cam); return [(p.x+1)/2*W,(1-p.y)/2*H];}
 function projE(v){return projW(v.clone().applyMatrix4(earth.matrixWorld));}
 const backOut=x=>{const c=1.9; return 1+(c+1)*Math.pow(x-1,3)+c*Math.pow(x-1,2);};
 window.render=(t)=>{
   earth.rotation.y=THREE.MathUtils.degToRad(spinAt(t)); earth.updateMatrixWorld(true);
   holo.uniforms.uScan.value=-1.2+((t*.35)%2.4);
-  const zoom=ease(seg(t,4.9,9.2));
+  const wide=(1-ease(seg(t,ZI0,ZI1)))+ease(seg(t,ZO0,ZO1));
   const dir0=PIN.clone().normalize().add(new THREE.Vector3(0,-.012,0)).normalize();
   const dir1=dir0.clone().applyAxisAngle(new THREE.Vector3(0,1,0),THREE.MathUtils.degToRad(-14)).add(new THREE.Vector3(0,.22,0)).normalize();
-  const dist=THREE.MathUtils.lerp(1.30,3.6,zoom);
-  cam.position.copy(dir0.clone().lerp(dir1,zoom).normalize().multiplyScalar(dist));
-  cam.lookAt(PIN.clone().multiplyScalar(1-zoom));
-  cam.fov=THREE.MathUtils.lerp(26,32,zoom); cam.updateProjectionMatrix();
-  // trace drawn ON the map: from the ground spot that was under the point at T0 to the spot under it now
-  const fadeAll=1-seg(t,5.6,6.6), g1=groundLon(t), N=90, pos=[], col=[];
-  for(let i=0;i<N;i++){const u=i/(N-1), lon=HOME[0]+(g1-HOME[0])*u, v=P(lon,HOME[1],1.0016); pos.push(v.x,v.y,v.z);
+  cam.position.copy(dir0.clone().lerp(dir1,wide).normalize().multiplyScalar(THREE.MathUtils.lerp(1.30,3.6,wide)));
+  cam.lookAt(PIN.clone().multiplyScalar(1-wide)); cam.fov=THREE.MathUtils.lerp(26,32,wide); cam.updateProjectionMatrix(); cam.updateMatrixWorld(true);
+  const fadeAll=1-seg(t,ZO0+.6,ZO0+1.6), g1=groundLon(t), N=90, pos=[], col=[];
+  for(let i=0;i<N;i++){const u=i/(N-1), v=P(HOME[0]+(g1-HOME[0])*u,HOME[1],1.0016); pos.push(v.x,v.y,v.z);
     const k=(.45+1.6*Math.pow(u,6))*fadeAll*(t<T0?0:1); col.push(k,.66*k,.32*k);}
-  tg.setPositions(pos); tg.setColors(col);
-  trailMat.linewidth=THREE.MathUtils.lerp(9,3,zoom);
-  pinB.position.copy(PIN.clone().multiplyScalar(1.001).applyMatrix4(new THREE.Matrix4()));
+  tg.setPositions(pos); tg.setColors(col); trailMat.linewidth=THREE.MathUtils.lerp(9,3,wide);
+  const vis=seg(t,ZI1-1.2,ZI1-.2);
+  if(t<=T1){pinB.position.copy(PIN.clone().multiplyScalar(1.001));} else {pinB.position.copy(P(g1,HOME[1],1.003).applyMatrix4(earth.matrixWorld));}
   const pulse=1+.22*Math.sin(t*7)*seg(t,T0,T0+.3)*(1-seg(t,T1,T1+.3));
-  pinB.scale.setScalar(THREE.MathUtils.lerp(.018,.05,zoom)*pulse);
-  // after the pull-back the point rides with the Earth again (it is just you, on the planet)
-  if(t>T1){const back=P(g1,HOME[1],1.003).applyMatrix4(earth.matrixWorld); pinB.position.copy(back);}
-  startRing.position.copy(P(HOME[0],HOME[1],1.002)); startRing.scale.setScalar(THREE.MathUtils.lerp(.013,.03,zoom)); startRing.material.opacity=seg(t,T0-.4,T0)*fadeAll;
-  coastMat.linewidth=THREE.MathUtils.lerp(2.6,1.5,zoom);
+  pinB.scale.setScalar(THREE.MathUtils.lerp(.018,.05,wide)*pulse*(t<T1?vis:1));
+  startRing.position.copy(P(HOME[0],HOME[1],1.002)); startRing.scale.setScalar(THREE.MathUtils.lerp(.013,.03,wide)); startRing.material.opacity=seg(t,T0-.4,T0)*fadeAll;
+  coastMat.linewidth=THREE.MathUtils.lerp(2.6,1.5,wide);
   const [hx,hy]=projW(PIN); const runOp=seg(t,T0,T0+.3)*(1-seg(t,T1,T1+.4));
-  label('min',`${(10*ease(seg(t,T0,T1))).toFixed(1)} MIN · 0 STEPS`,hx,hy-50,24,'',runOp);
-  const [sx,sy]=projE(P(HOME[0],HOME[1])); label('start','START',sx,sy+44,20,'',startRing.material.opacity*.8*(1-zoom));
+  label('min',`${(10*seg(t,T0,T1)).toFixed(1)} MIN · 0 STEPS`,hx,hy-50,24,'',runOp);
+  const [sx,sy]=projE(P(HOME[0],HOME[1])); label('start','START',sx,sy+44,20,'',startRing.material.opacity*.8*(1-wide));
   const pop=seg(t,T1,T1+.45), [mx,my]=projE(P((HOME[0]+g1)/2,HOME[1]));
-  label('km','250 KM',mx,my-120,80,'amb',Math.min(1,pop*3)*(1-seg(t,5.4,6.0)));
+  label('km','250 KM',mx,my-120,80,'amb',Math.min(1,pop*3)*(1-seg(t,ZO0+.2,ZO0+.8)));
   const e=document.getElementById('km'); e.style.transform=`translate(-50%,-50%) scale(${pop>0?backOut(pop):0})`; e.style.filter=`brightness(${1+1.5*Math.max(0,1-pop*2.2)})`;
-  label('km2','IN 10 MINUTES',mx,my-58,24,'',seg(t,T1+.25,T1+.6)*(1-seg(t,5.4,6.0)));
-  const eOp=seg(t,7.0,8.0);
+  label('km2','IN 10 MINUTES',mx,my-58,24,'',seg(t,T1+.25,T1+.6)*(1-seg(t,ZO0+.2,ZO0+.8)));
+  label('spin','SPINS ONCE A DAY',W/2,H-80,30,'',seg(t,.9,1.5)*(1-seg(t,ZI0+1.2,ZI0+2)));
+  const eOp=seg(t,CAP,CAP+1);
   label('cap','EARTH CARRIED ME ≈ 250 KM IN 10 MINUTES',W/2,H-110,34,'',eOp);
-  label('cap2','IT SPINS ONCE A DAY',W/2,H-62,20,'',eOp*.75);
+  label('cap2','WITHOUT A SINGLE STEP',W/2,H-62,20,'',eOp*.75);
+  document.body.style.opacity=seg(t,0,.5);
   comp.render();
 };
 window.ready=new Promise(r=>{THREE.DefaultLoadingManager.onLoad=()=>{const w=()=>window.geoReady?r(1):setTimeout(w,50); w();};});
