@@ -1,0 +1,152 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>
+@font-face{font-family:Lemon;src:url(fonts/LEMONMILK-Medium.otf),url(fonts/LemonMilk.otf)}
+@font-face{font-family:LemonL;src:url(fonts/LEMONMILK-Light.otf),url(fonts/LemonMilk.otf)}
+html,body{margin:0;background:#000;overflow:hidden;width:1920px;height:1080px}
+#ui{position:absolute;inset:0;pointer-events:none;font-family:Lemon,'DejaVu Sans',sans-serif;color:#bff4ff}
+.lab{position:absolute;white-space:nowrap;text-shadow:0 0 8px rgba(90,220,255,.9),0 0 26px rgba(60,180,255,.55);letter-spacing:.12em}
+.amb{color:#ffd39a;text-shadow:0 0 8px rgba(255,170,70,.9),0 0 26px rgba(255,140,40,.5)}
+</style>
+<script type="importmap">{"imports":{"three":"/npm/node_modules/three/build/three.module.js","three/addons/":"/npm/node_modules/three/examples/jsm/"}}</script>
+</head><body><div id="ui"></div>
+<script type="module">
+import * as THREE from 'three';
+import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
+import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
+import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
+import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
+import {LineSegments2} from 'three/addons/lines/LineSegments2.js';
+import {LineSegmentsGeometry} from 'three/addons/lines/LineSegmentsGeometry.js';
+import {LineMaterial} from 'three/addons/lines/LineMaterial.js';
+import {Line2} from 'three/addons/lines/Line2.js';
+import {LineGeometry} from 'three/addons/lines/LineGeometry.js';
+
+const W=1920,H=1080, ui=document.getElementById('ui');
+const R=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+R.setSize(W,H); R.setPixelRatio(1); R.toneMapping=THREE.ACESFilmicToneMapping; R.toneMappingExposure=1.0;
+document.body.prepend(R.domElement);
+const scene=new THREE.Scene(); const cam=new THREE.PerspectiveCamera(32,W/H,0.001,100);
+const L=new THREE.TextureLoader(); const tex=n=>{const t=L.load('tex/'+n); t.colorSpace=THREE.NoColorSpace; t.anisotropy=8; return t;};
+const T={night:tex('earth-night.jpg'),day:tex('earth-blue-marble.jpg'),water:tex('earth-water.png'),india:tex('india.png'),coast:tex('coast.png'),topo:tex('earth-topology.png')};
+
+// lon/lat -> point on unit sphere in three's SphereGeometry convention
+const P=(lon,lat,r=1)=>{const p=THREE.MathUtils.degToRad(lon+180),l=THREE.MathUtils.degToRad(lat);
+  return new THREE.Vector3(-Math.cos(p)*Math.cos(l)*r,Math.sin(l)*r,Math.sin(p)*Math.cos(l)*r);};
+
+const earth=new THREE.Group(); scene.add(earth);
+const holo=new THREE.ShaderMaterial({transparent:true,depthWrite:true,
+  uniforms:{...Object.fromEntries(Object.entries(T).map(([k,v])=>[k,{value:v}])),uT:{value:0},uIndia:{value:1},uScan:{value:0}},
+  vertexShader:`varying vec2 vUv; varying vec3 vN; varying vec3 vV; varying vec3 vP;
+    void main(){vUv=uv; vec4 w=modelMatrix*vec4(position,1.); vP=position; vN=normalize(mat3(modelMatrix)*normal); vV=normalize(cameraPosition-w.xyz); gl_Position=projectionMatrix*viewMatrix*w;}`,
+  fragmentShader:`uniform sampler2D night,day,water,india,coast,topo; uniform float uT,uIndia,uScan; varying vec2 vUv; varying vec3 vN,vV,vP;
+    void main(){
+      float land=1.-texture2D(water,vUv).r;
+      float lat=(vUv.y-.5)*3.14159; vec2 g=vec2(vUv.x*360.*cos(lat),vUv.y*180.)*2.; vec2 f=fract(g)-.5;
+      float rr=length(f), aa=fwidth(rr)*1.2; float dots=(1.-smoothstep(.22-aa,.22+aa,rr))*land*smoothstep(.55,.25,fwidth(g.x));                    // dotted land
+      float co=0.;
+      float ind=texture2D(india,vUv).r*uIndia;
+      float lights=pow(texture2D(night,vUv).r,1.6);
+      float relief=dot(texture2D(day,vUv).rgb,vec3(.3,.5,.2));
+      vec2 gr=abs(fract(vec2(vUv.x*24.,vUv.y*12.))-.5); float grid=max(smoothstep(.49,.5,gr.x*1.0+.003),smoothstep(.49,.5,gr.y+.003));
+      float fr=pow(1.-max(dot(vN,vV),0.),2.5);
+      vec3 cy=vec3(.30,.85,1.0), am=vec3(1.,.62,.25);
+      vec3 c=vec3(.003,.012,.03)+cy*(relief*.05*land+dots*.10+co*.40+grid*.035)+am*lights*.35*land+am*ind*(.06+.22*dots)+cy*fr*.35;
+      float scan=.92+.08*sin(gl_FragCoord.y*1.6);
+      float band=exp(-pow((vP.y-uScan)*140.,2.))*.35;
+      c*=scan; c+=cy*band*.5;
+      gl_FragColor=vec4(c,1.);
+    }`});
+earth.add(new THREE.Mesh(new THREE.SphereGeometry(1,256,128),holo));
+// atmosphere
+const atm=new THREE.Mesh(new THREE.SphereGeometry(1.06,128,64),new THREE.ShaderMaterial({transparent:true,side:THREE.BackSide,blending:THREE.AdditiveBlending,depthWrite:false,
+  vertexShader:`varying vec3 vN; varying vec3 vV; void main(){vec4 w=modelMatrix*vec4(position,1.); vN=normalize(mat3(modelMatrix)*normal); vV=normalize(cameraPosition-w.xyz); gl_Position=projectionMatrix*viewMatrix*w;}`,
+  fragmentShader:`varying vec3 vN,vV; void main(){float d=abs(dot(vN,vV)); float f=pow(1.-d,5.)*.55*smoothstep(0.,.35,d); gl_FragColor=vec4(vec3(.25,.7,1.)*f,1.);}`}));
+scene.add(atm);
+// stars
+{const n=4000,a=new Float32Array(n*3),s=new Float32Array(n); for(let i=0;i<n;i++){const v=new THREE.Vector3().randomDirection().multiplyScalar(40+Math.random()*20); a.set([v.x,v.y,v.z],i*3); s[i]=Math.random();}
+ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(a,3)); g.setAttribute('s',new THREE.BufferAttribute(s,1));
+ scene.add(new THREE.Points(g,new THREE.ShaderMaterial({transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,
+  vertexShader:`attribute float s; varying float vs; void main(){vs=s; gl_PointSize=1.+s*s*2.2; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+  fragmentShader:`varying float vs; void main(){float d=length(gl_PointCoord-.5); gl_FragColor=vec4(vec3(.75,.88,1.)*(.25+vs*.9)*smoothstep(.5,.0,d),1.);}`})));}
+
+// "you" pin + 10-minute path (Earth turns 2.5 deg of longitude in 10 min)
+const HOME=[79.4,11.1], PATH=2.5;
+const pinMat=new THREE.SpriteMaterial({color:0xffffff,blending:THREE.AdditiveBlending,depthWrite:false,map:(()=>{const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d');const g=x.createRadialGradient(64,64,0,64,64,64);g.addColorStop(0,'#fff');g.addColorStop(.15,'#bff');g.addColorStop(.4,'rgba(80,200,255,.35)');g.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=g;x.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);})()});
+const pinA=new THREE.Sprite(pinMat), pinB=new THREE.Sprite(pinMat.clone()); pinB.material.color=new THREE.Color(1,.75,.4);
+earth.add(pinA,pinB);
+const pathGeo=new THREE.BufferGeometry(); const NP=120, pa=new Float32Array(NP*3);
+for(let i=0;i<NP;i++){const v=P(HOME[0]+PATH*i/(NP-1),HOME[1],1.0015); pa.set([v.x,v.y,v.z],i*3);} pathGeo.setAttribute('position',new THREE.BufferAttribute(pa,3));
+const pathMat=new THREE.LineDashedMaterial({color:0xffb050,dashSize:.0016,gapSize:.0012,transparent:true});
+const path=new THREE.Line(pathGeo,pathMat); path.computeLineDistances(); earth.add(path);
+const beam=new THREE.Mesh(new THREE.CylinderGeometry(.0006,.0006,.05,8),new THREE.MeshBasicMaterial({color:0x9fefff,transparent:true,opacity:.8,blending:THREE.AdditiveBlending}));
+//no beam
+
+// vector coastlines (crisp at every zoom)
+const coastMat=new LineMaterial({color:0x6fdcff,linewidth:2.2,transparent:true,opacity:.95,worldUnits:false}); coastMat.resolution.set(W,H);
+const indMat=new LineMaterial({color:0xffc27a,linewidth:2.6,transparent:true,opacity:1,worldUnits:false}); indMat.resolution.set(W,H);
+fetch('geo50.json').then(r=>r.json()).then(g=>{
+  const mk=(rings,mat,r)=>{const a=[]; for(const ring of rings){for(let i=0;i<ring.length-1;i++){const p=P(...ring[i],r),q=P(...ring[i+1],r); a.push(p.x,p.y,p.z,q.x,q.y,q.z);}}
+    const geo=new LineSegmentsGeometry(); geo.setPositions(a); const l=new LineSegments2(geo,mat); earth.add(l); return l;};
+  mk(g.land,coastMat,1.0006); mk(g.india,indMat,1.0009); window.geoReady=1;});
+// comet trail of the pin, kept in SPACE (scene), while the pin itself rides on the turning Earth
+const trailMat=new LineMaterial({color:0xffffff,vertexColors:true,linewidth:6,transparent:true,worldUnits:false}); trailMat.resolution.set(W,H);
+const tg=new LineGeometry(); const trail=new Line2(tg,trailMat); earth.add(trail);
+const ringTex=(()=>{const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d');x.strokeStyle='#cff';x.lineWidth=7;x.shadowColor='#6df';x.shadowBlur=14;x.beginPath();x.arc(64,64,40,0,7);x.stroke();return new THREE.CanvasTexture(c);})();
+const startRing=new THREE.Sprite(new THREE.SpriteMaterial({map:ringTex,color:0x9fefff,blending:THREE.AdditiveBlending,depthWrite:false,transparent:true})); earth.add(startRing);
+path.visible=false; pinA.visible=false; earth.remove(pinB); scene.add(pinB);
+const comp=new EffectComposer(R); comp.addPass(new RenderPass(scene,cam));
+const bloom=new UnrealBloomPass(new THREE.Vector2(W,H),.55,.45,.32); comp.addPass(bloom); comp.addPass(new OutputPass());
+
+const ease=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2, cl=(x,a=0,b=1)=>Math.min(b,Math.max(a,x)), seg=(t,a,b)=>cl((t-a)/(b-a));
+function label(id,html,x,y,size,cls='',op=1,align='center'){let e=document.getElementById(id); if(!e){e=document.createElement('div');e.id=id;e.className='lab '+cls;ui.appendChild(e);} e.innerHTML=html; e.style.fontSize=size+'px'; e.style.opacity=op;
+  e.style.left=x+'px'; e.style.top=y+'px'; e.style.transform=`translate(${align==='center'?'-50%':'0'},-50%)`;}
+function proj(v){const p=v.clone().applyMatrix4(earth.matrixWorld).project(cam); return [(p.x+1)/2*W,(1-p.y)/2*H];}
+
+// t in seconds. Close shot: camera still, Earth turns 2.5 deg (= 10 minutes) and carries the pin, leaving a glowing trail;
+// "250 KM" pops on arrival; then a long pull-back to the whole spinning Earth.
+const T0=.8, T1=3.8, BASE=-28;
+const spinAt=t=>BASE+PATH*ease(seg(t,T0,T1))+1.1*Math.max(0,t-6.2);
+const rotY=t=>new THREE.Euler(0,THREE.MathUtils.degToRad(spinAt(t)),0);
+// the glowing point is STATIC in the frame: fixed in space where HOME was at T0. The Earth turns under it.
+const PIN=P(HOME[0],HOME[1],1.002).applyEuler(rotY(0));
+const groundLon=t=>HOME[0]-(spinAt(Math.min(t,T1))-spinAt(T0));          // longitude currently under the point
+function projW(v){const p=v.clone().project(cam); return [(p.x+1)/2*W,(1-p.y)/2*H];}
+function projE(v){return projW(v.clone().applyMatrix4(earth.matrixWorld));}
+const backOut=x=>{const c=1.9; return 1+(c+1)*Math.pow(x-1,3)+c*Math.pow(x-1,2);};
+window.render=(t)=>{
+  earth.rotation.y=THREE.MathUtils.degToRad(spinAt(t)); earth.updateMatrixWorld(true);
+  holo.uniforms.uScan.value=-1.2+((t*.35)%2.4);
+  const zoom=ease(seg(t,4.9,9.2));
+  const dir0=PIN.clone().normalize().add(new THREE.Vector3(0,-.012,0)).normalize();
+  const dir1=dir0.clone().applyAxisAngle(new THREE.Vector3(0,1,0),THREE.MathUtils.degToRad(-14)).add(new THREE.Vector3(0,.22,0)).normalize();
+  const dist=THREE.MathUtils.lerp(1.30,3.6,zoom);
+  cam.position.copy(dir0.clone().lerp(dir1,zoom).normalize().multiplyScalar(dist));
+  cam.lookAt(PIN.clone().multiplyScalar(1-zoom));
+  cam.fov=THREE.MathUtils.lerp(26,32,zoom); cam.updateProjectionMatrix();
+  // trace drawn ON the map: from the ground spot that was under the point at T0 to the spot under it now
+  const fadeAll=1-seg(t,5.6,6.6), g1=groundLon(t), N=90, pos=[], col=[];
+  for(let i=0;i<N;i++){const u=i/(N-1), lon=HOME[0]+(g1-HOME[0])*u, v=P(lon,HOME[1],1.0016); pos.push(v.x,v.y,v.z);
+    const k=(.45+1.6*Math.pow(u,6))*fadeAll*(t<T0?0:1); col.push(k,.66*k,.32*k);}
+  tg.setPositions(pos); tg.setColors(col);
+  trailMat.linewidth=THREE.MathUtils.lerp(9,3,zoom);
+  pinB.position.copy(PIN.clone().multiplyScalar(1.001).applyMatrix4(new THREE.Matrix4()));
+  const pulse=1+.22*Math.sin(t*7)*seg(t,T0,T0+.3)*(1-seg(t,T1,T1+.3));
+  pinB.scale.setScalar(THREE.MathUtils.lerp(.018,.05,zoom)*pulse);
+  // after the pull-back the point rides with the Earth again (it is just you, on the planet)
+  if(t>T1){const back=P(g1,HOME[1],1.003).applyMatrix4(earth.matrixWorld); pinB.position.copy(back);}
+  startRing.position.copy(P(HOME[0],HOME[1],1.002)); startRing.scale.setScalar(THREE.MathUtils.lerp(.013,.03,zoom)); startRing.material.opacity=seg(t,T0-.4,T0)*fadeAll;
+  coastMat.linewidth=THREE.MathUtils.lerp(2.6,1.5,zoom);
+  const [hx,hy]=projW(PIN); const runOp=seg(t,T0,T0+.3)*(1-seg(t,T1,T1+.4));
+  label('min',`${(10*ease(seg(t,T0,T1))).toFixed(1)} MIN · 0 STEPS`,hx,hy-50,24,'',runOp);
+  const [sx,sy]=projE(P(HOME[0],HOME[1])); label('start','START',sx,sy+44,20,'',startRing.material.opacity*.8*(1-zoom));
+  const pop=seg(t,T1,T1+.45), [mx,my]=projE(P((HOME[0]+g1)/2,HOME[1]));
+  label('km','250 KM',mx,my-120,80,'amb',Math.min(1,pop*3)*(1-seg(t,5.4,6.0)));
+  const e=document.getElementById('km'); e.style.transform=`translate(-50%,-50%) scale(${pop>0?backOut(pop):0})`; e.style.filter=`brightness(${1+1.5*Math.max(0,1-pop*2.2)})`;
+  label('km2','IN 10 MINUTES',mx,my-58,24,'',seg(t,T1+.25,T1+.6)*(1-seg(t,5.4,6.0)));
+  const eOp=seg(t,7.0,8.0);
+  label('cap','EARTH CARRIED ME ≈ 250 KM IN 10 MINUTES',W/2,H-110,34,'',eOp);
+  label('cap2','IT SPINS ONCE A DAY',W/2,H-62,20,'',eOp*.75);
+  comp.render();
+};
+window.ready=new Promise(r=>{THREE.DefaultLoadingManager.onLoad=()=>{const w=()=>window.geoReady?r(1):setTimeout(w,50); w();};});
+</script></body></html>
