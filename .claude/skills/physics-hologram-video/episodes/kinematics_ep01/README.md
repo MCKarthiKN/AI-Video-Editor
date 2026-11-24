@@ -16,3 +16,9 @@ Pipeline used for a long, multi-clip episode (7 source clips, to-camera + overhe
 6. `score_ep01.py` - voice cut with per-piece frame-exact lengths (keeps A/V sync), levelling, event cues from word
    timings; `assemble.sh` - concat + loudnorm -14 LUFS.
 Lemon Milk (user font, capitals only, donationware) lives in the work dir, not in the repo.
+
+## Reel (60 s, 9:16) - `reel.py`, `reel_audio.py`
+Cut from the finished episode: hook on the strongest visual + claim in second 0 ("I MOVED 250 KM" over the Earth trace),
+0.6 s rewind + "WAIT… HOW?", setup, payoff, twist (train), big idea, CTA question that loops. Layout: top band running
+question + progress bar, middle 960x1080 crop per segment (pick crop centre so cards/subjects stay in), bottom band
+keyword pops on the spoken words with a small zoom punch each. Stream segments (caching 4K/1080 frames blows RAM).
