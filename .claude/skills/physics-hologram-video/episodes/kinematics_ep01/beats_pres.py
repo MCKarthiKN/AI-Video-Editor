@@ -179,8 +179,8 @@ def ov_ending(t, img, G, face, E):
         cv2.ellipse(m, (1560, 610), (190, 50), 0, 180, 180 + 360 * u, 255, 3, cv2.LINE_AA); cv2.circle(m, (1370, 610), 9, 255, -1, cv2.LINE_AA)
         a2 = math.radians(180 + 360 * u); cv2.circle(m, P((1560 + 190 * math.cos(a2), 610 + 50 * math.sin(a2))), 8, 255, -1, cv2.LINE_AA)
         glow(G, m, CYAN, 1, 1, 5, nx)
-    h = env(t, E(125.0), E(129.6), .6, .1)
-    if h > 0: T_(G, 'HAPPY LEARNING', (1540, 470), 70, WHITE, 'Bold', amp=h, track=.2)
+    h = eout(seg(t, E(125.0), E(125.0) + .6))
+    if h > 0: T_(G, 'HAPPY LEARNING', (1570, 470), 50, WHITE, 'Bold', amp=h, track=.12)
 
 CUT = {'opening': [('earth_open', 28.7, 44.06, 'full')],
        'ending': [('globe', 435.2 + 5.8, 435.2 + 14.6, 'screen'), ('sun', 435.2 + 14.1, 435.2 + 30.1, 'full'), ('galaxy', 435.2 + 30.0, 435.2 + 36.8, 'full')]}

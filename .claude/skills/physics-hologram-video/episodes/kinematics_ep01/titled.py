@@ -17,7 +17,7 @@ SECTIONS = [  # (sources [(file, first_frame, n_frames or None)], audio frames, 
     ([(f'{O}/frame.mp4', 0, None), (f'{O}/book.mp4', 0, None)], 785 + 431, 'PART 4 · NAME IT', 'FRAME OF REFERENCE', 'OBSERVER · RULER · CLOCK'),
     ([(f'{O}/position.mp4', 0, None)], 3592, 'PART 5 · SAY IT IN MATHS', 'POSITION', 'ORIGIN · DIRECTION · UNIT'),
     ([(f'{O}/origins.mp4', 0, None)], 2423, 'PART 6 · TEST IT', 'TWO ORIGINS, ONE CAR', 'CHEEMS · PERRO · ONE CAR'),
-    ([(f'{O}/ending_a.mp4', 0, None), (f'{O}/ending_b.mp4', 0, 952), (f'{O}/ending_c.mp4', 0, None)], 2403,
+    ([(f'{O}/ending_a.mp4', 0, None), (f'{O}/ending_b.mp4', 0, 872), (f'{O}/ending_c.mp4', 0, None)], 2403,
      'PART 7 · WONDER AGAIN', 'IS ANYTHING TRULY AT REST?', 'EARTH · SUN · GALAXY'),
 ]
 HOLD, EASE, STATIC, DISS, OUT_HOLD, OUT_FADE = 25, 12, 38, 13, 50, 25      # frames @25 fps
