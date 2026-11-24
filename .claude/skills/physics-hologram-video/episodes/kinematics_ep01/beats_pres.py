@@ -1,6 +1,6 @@
 """Presenter beats (opening, guess, ending): RVM cutout on the dark stage + holograms + 3D cutaways.
 usage: python3 beats_pres.py <beat> <out.mp4> [stills t1,t2,...]"""
-import sys, math
+import sys, math, os
 import numpy as np, cv2
 from fx import *
 from beats_over import eye, clock, ruler, pop_text, pop_ring
@@ -208,7 +208,7 @@ def frame_at(beat, t, vids):
             else:                 # small hologram globe beside the presenter
                 g = cv2.resize(v, (W // 2, H // 2)); canvas = np.zeros_like(out); canvas[150:150 + H // 2, 940:940 + W // 2] = g
                 out = 1 - (1 - out) * (1 - canvas)
-    if beat == 'ending': out *= 1 - .9 * seg(t, E(128.2), E(129.1))
+    if beat == 'ending' and not os.environ.get('NOFADE'): out *= 1 - .9 * seg(t, E(128.2), E(129.1))
     return (np.clip(out, 0, 1) * 255 + .5).astype(np.uint8)
 
 def render(beat, out, stills=None):

@@ -21,6 +21,12 @@ slow time, drop it (slow free fall with a dotted distance scale), stop time, ask
 - Speaks **Tamil (Tanglish)**. Read their words; never invent what they said - confirm unclear words.
 - Prefers short, plain-language replies; give exact text to paste when settings are needed.
 - They supply their own AI-generated wireframe assets; use them, and keep them in the hologram style.
+- **Section pacing (long videos) - never cut straight from one topic/section into the next.** At every section
+  boundary: (1) hold the last frame 1.0 s with a gentle fade / soft glow out; (2) heading title card 2.0-2.5 s
+  (smooth ease-in, soft background glow, held static >= 1.5 s before the explanation resumes); (3) 0.5 s
+  cross-dissolve from the card into the next section. Outro: hold the final frame 2.0 s, then fade to black
+  (never fade during the last spoken words). Implementation: `episodes/kinematics_ep01/titled.py`.
+  (Reels are excluded unless asked - they rely on fast pacing.)
 
 ## Environment (fresh cloud session)
 1. Allowed domains needed (tell the user the exact lines to paste if missing):
