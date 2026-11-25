@@ -21,6 +21,12 @@ slow time, drop it (slow free fall with a dotted distance scale), stop time, ask
 - Speaks **Tamil (Tanglish)**. Read their words; never invent what they said - confirm unclear words.
 - Prefers short, plain-language replies; give exact text to paste when settings are needed.
 - They supply their own AI-generated wireframe assets; use them, and keep them in the hologram style.
+- **Section pacing (long videos) - never cut straight from one topic/section into the next.** At every section
+  boundary: (1) hold the last frame 1.0 s with a gentle fade / soft glow out; (2) heading title card 2.0-2.5 s
+  (smooth ease-in, soft background glow, held static >= 1.5 s before the explanation resumes); (3) 0.5 s
+  cross-dissolve from the card into the next section. Outro: hold the final frame 2.0 s, then fade to black
+  (never fade during the last spoken words). Implementation: `episodes/kinematics_ep01/titled.py`.
+  (Reels are excluded unless asked - they rely on fast pacing.)
 
 ## Environment (fresh cloud session)
 1. Allowed domains needed (tell the user the exact lines to paste if missing):
@@ -100,6 +106,17 @@ dip slightly under speech, final `loudnorm=I=-14:TP=-1.5`.
 - Flashes/ripples: short (tau ~0.08 s) and small amplitude; a 0.3 s full-frame lift turns the frame grey.
 - Effects in front of the face are never OK (orb radius limited to below the chin, front leaves masked off the face).
 - Repo is public: commit code only, never the user's footage or images.
+
+## Long multi-clip episodes (learned on Kinematics Ep 1)
+- Script docx + several clips: map script beats to clips first (clip names can differ from the shot list).
+- Transcribe with `scripts/transcribe_chunks.py` (silence-bounded <= 24 s chunks); whole-file Whisper drops words at 30 s edges.
+- Build an EDL (`episodes/kinematics_ep01/edl.py`): cut retakes/false starts/stammers by word timings, auto-tighten pauses;
+  re-transcribe the edited voice to catch chopped words before rendering.
+- Higher-quality graphics: three.js scenes in headless Chromium (`templates/three/`), NASA textures from the
+  `three-globe` npm tarball, vector coastlines (world-atlas) - crisp at every zoom. Keep bloom subtle.
+- Background jobs stop at 2 h: split RVM and long renders into chunks. 4 cores: don't run more than ~3 heavy jobs.
+- User asked: Earth beat = glowing point fixed on screen, Earth turns under it, trace drawn back to START, "250 KM" pops.
+- User likes: Lemon Milk font for all on-screen text (they supply it), 3D-quality animations.
 
 ## Templates
 `templates/render_v3.py`, `score_v3.py`, `subs_v3.py`: the earlier vertical talking-head version (icons from
